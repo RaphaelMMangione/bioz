@@ -1,4 +1,4 @@
-# bioz
+![bioz](assets/bioz-1c-lockup-light.png)
 
 Format-aware compressor. For FASTQ, it separates the file into homogeneous
 streams (read IDs, `+` lines, 2-bit-packed sequence, quality scores) and
