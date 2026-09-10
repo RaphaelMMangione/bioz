@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bioz"
+version = "0.1.0"
+description = "Format-aware compressor for sequencing data (FASTQ-aware stream separation + best-of zstd/xz backend), with a generic fallback for any other file."
+requires-python = ">=3.8"
+dependencies = ["numpy"]
+
+[project.scripts]
+bioz = "bioz.cli:main"
+
+[tool.setuptools]
+packages = ["bioz"]

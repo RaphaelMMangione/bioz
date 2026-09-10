@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+bioz.egg-info/
+
+# regeneratable via tests/make_test_data.py
+tests/test_data/
+
+# scratch outputs from running tests/benchmarks
+tests/bench_work/
+tests/work/
