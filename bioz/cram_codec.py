@@ -35,7 +35,7 @@ def _file_md5(path, chunk_size=1 << 20) -> str:
     return h.hexdigest()
 
 
-def compress_file(in_path, out_path, ref_path, threads: int = 0, try_xz: bool = True):
+def compress_file(in_path, out_path, ref_path, threads: int = 0, try_xz: bool = True, ultra: bool = False):
     ref_path = Path(ref_path)
     if not ref_path.exists():
         raise FileNotFoundError(f"reference not found: {ref_path}")
@@ -51,7 +51,7 @@ def compress_file(in_path, out_path, ref_path, threads: int = 0, try_xz: bool = 
         if proc.returncode != 0:
             raise RuntimeError(f"samtools BAM/SAM->CRAM conversion failed: {proc.stderr.decode(errors='replace')}")
 
-        data_backend, data_tmp, data_size = backend.compress_file(cram_tmp, threads=threads, try_xz=try_xz)
+        data_backend, data_tmp, data_size = backend.compress_file(cram_tmp, threads=threads, try_xz=try_xz, ultra=ultra)
         try:
             ref_abspath = str(ref_path.resolve()).encode()
             ref_md5 = _file_md5(ref_path).encode()

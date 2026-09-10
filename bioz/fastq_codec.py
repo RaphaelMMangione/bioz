@@ -149,7 +149,7 @@ class _StreamingSeqPacker:
             self.carry_codes = np.zeros(0, dtype=np.uint8)
 
 
-def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True, lossy_quality: bool = False):
+def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True, lossy_quality: bool = False, ultra: bool = False):
     tmp_dir = tempfile.mkdtemp(prefix="bioz_fastq_")
     tmp_dir = Path(tmp_dir)
     paths = {name: tmp_dir / name for name in ("ids", "plus", "seq_packed", "seq_exc", "lengths", "qual")}
@@ -196,7 +196,7 @@ def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True, loss
                          (paths["seq_exc"], False), (paths["lengths"], False), (paths["qual"], False)]
         streams = []
         for path, _ in streams_meta:
-            backend_id, comp_path, _size = backend.compress_file(path, threads=threads, try_xz=try_xz)
+            backend_id, comp_path, _size = backend.compress_file(path, threads=threads, try_xz=try_xz, ultra=ultra)
             streams.append((backend_id, comp_path))
 
         meta = struct.pack("<BQQ", 1 if lossy_quality else 0, n_reads, total_bases)

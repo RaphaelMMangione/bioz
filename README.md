@@ -56,6 +56,13 @@ bioz decompress mydata_bioz/                   # -> mydata_bioz_decompressed/<na
 ```
 
 `--fast` skips the xz comparison (zstd only) for speed on large files.
+`--ultra` switches zstd to its slowest/strongest setting (`--ultra -22
+--long=27`) for a little extra ratio -- OFF by default, since on a 1.7GB
+file it measured ~2.4MB/s (~12 minutes) vs. the default `-19` level's
+normal speed, often for *no* ratio difference at all (xz already wins on
+most streams tested here, so zstd's own level rarely changes the final
+output size -- see the benchmark numbers below, unchanged from before
+this became opt-in).
 `-T N` controls compressor thread count (default: all cores).
 
 pod5 (raw nanopore signal) is not handled by bioz.
@@ -70,13 +77,13 @@ Python process itself regardless of file size, on files from a few MB up
 to 1.7GB; see below). No fixed file-size ceiling from bioz's own side.
 
 The one caveat: the *total* process-tree peak RSS reported by `time -v`
-is higher than that (~1-2.7GB on the files tested) and grows somewhat
-with input size -- that's `zstd --ultra -22 --long=27` (the backend's
-strongest setting) running multi-threaded across all cores, an external
-tool characteristic unrelated to bioz's own memory handling, not new in
-this pass. If footprint at extreme scale (100GB+) matters more than
-ratio, lower `-T`/pass `--fast` to trade some compression ratio for a
-smaller, more predictable memory profile.
+is higher than that (~1-2.7GB on the 400MB-1.7GB files tested, with
+`--ultra`) and grows somewhat with input size -- that's zstd's own
+multi-threaded memory use, an external tool characteristic unrelated to
+bioz's own memory handling. At the default (non-`--ultra`) level this is
+smaller. If footprint at extreme scale (100GB+) matters more than ratio,
+lower `-T` to trade some speed for a smaller, more predictable memory
+profile.
 
 Everything else (correctness, ratio vs. gzip/zstd/xz) is tested and
 benchmarked in `tests/`.

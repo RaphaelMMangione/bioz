@@ -49,19 +49,20 @@ def _compress_one(in_path: Path, out_path: Path, args) -> str:
 
     if fmt == "fastq":
         fastq_codec.compress_file(
-            in_path, out_path, threads=args.threads, try_xz=args.max, lossy_quality=args.lossy_quality
+            in_path, out_path, threads=args.threads, try_xz=args.max,
+            lossy_quality=args.lossy_quality, ultra=args.ultra
         )
         return "fastq-aware" + (", lossy quality" if args.lossy_quality else ", lossless")
     elif fmt == "sam" and args.ref:
         cram_codec.compress_file(
-            in_path, out_path, ref_path=args.ref, threads=args.threads, try_xz=args.max
+            in_path, out_path, ref_path=args.ref, threads=args.threads, try_xz=args.max, ultra=args.ultra
         )
         return "CRAM (reference-based)"
     elif fmt == "sam":
-        sam_codec.compress_file(in_path, out_path, threads=args.threads, try_xz=args.max)
+        sam_codec.compress_file(in_path, out_path, threads=args.threads, try_xz=args.max, ultra=args.ultra)
         return "columnar SAM (no reference given -- pass --ref for a bigger win)"
     else:
-        generic_codec.compress_file(in_path, out_path, threads=args.threads, try_xz=args.max)
+        generic_codec.compress_file(in_path, out_path, threads=args.threads, try_xz=args.max, ultra=args.ultra)
         return "generic"
 
 
@@ -163,6 +164,7 @@ def main(argv=None):
     pc.add_argument("--ref", help="reference FASTA for BAM/SAM/CRAM input -> enables CRAM (reference-based) compression for every BAM/SAM found, the biggest win for aligned data. Without it (the default), falls back to columnar SAM splitting -- no reference is used unless you pass this.")
     pc.add_argument("--max", action="store_true", default=True, help="also try xz and keep whichever backend wins (default: on)")
     pc.add_argument("--fast", dest="max", action="store_false", help="zstd only, skip the xz comparison (faster, usually slightly worse ratio)")
+    pc.add_argument("--ultra", action="store_true", help="zstd's slowest/strongest setting (--ultra -22 --long=27) for a little extra ratio -- OFF by default (normal-speed -19). On a 1.7GB file, --ultra measured ~2.4MB/s (~12min); default is far faster.")
     pc.add_argument("-T", "--threads", type=int, default=0, help="threads for backend compressors (default: all cores)")
     pc.set_defaults(func=cmd_compress)
 

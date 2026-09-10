@@ -62,7 +62,7 @@ def _sam_lines(in_path):
                 yield line.rstrip(b"\n")
 
 
-def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True):
+def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True, ultra: bool = False):
     tmp_dir = Path(tempfile.mkdtemp(prefix="bioz_sam_"))
     field_names = [f"field{k}" for k in range(N_FIELDS)]
     paths = {name: tmp_dir / name for name in field_names + ["header", "tags"]}
@@ -97,7 +97,7 @@ def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True):
         stream_order = ["header"] + field_names + ["tags"]
         streams = []
         for name in stream_order:
-            backend_id, comp_path, _size = backend.compress_file(paths[name], threads=threads, try_xz=try_xz)
+            backend_id, comp_path, _size = backend.compress_file(paths[name], threads=threads, try_xz=try_xz, ultra=ultra)
             streams.append((backend_id, comp_path))
 
         meta = n_records.to_bytes(8, "little") + n_header.to_bytes(8, "little")

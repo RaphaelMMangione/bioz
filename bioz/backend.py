@@ -1,8 +1,11 @@
 """
 Generic byte-stream compression backend. Not a novel entropy coder -- this
-picks the best of the strongest available general-purpose compressors
-(zstd --ultra -22 --long, xz -9e) per stream, so higher layers (fastq
-codec, generic file codec) don't have to know or care which one won.
+picks the best of the strongest available general-purpose compressors at
+a normal-speed level by default (zstd -19, xz -9e) per stream, so higher
+layers (fastq codec, generic file codec) don't have to know or care which
+one won. Pass `ultra=True` for zstd's slowest/strongest setting
+(--ultra -22 --long=27) when ratio matters more than time -- on a 1.7GB
+file this was ~2.4MB/s (~12 minutes), vs. -19's normal-speed throughput.
 
 Everything here is file-to-file (never holds a whole stream as a single
 Python `bytes` object) so peak memory stays bounded regardless of input
@@ -43,8 +46,14 @@ def _run_file_to_file(cmd, in_path, out_path):
         raise RuntimeError(f"{cmd[0]} failed: {proc.stderr.decode(errors='replace')}")
 
 
-def _zstd_compress(data: bytes, threads: int) -> bytes:
-    return _run([ZSTD, "-q", "--ultra", "-22", "--long=27", f"-T{threads}", "-c"], data)
+def _zstd_cmd(threads: int, ultra: bool) -> list:
+    if ultra:
+        return [ZSTD, "-q", "--ultra", "-22", "--long=27", f"-T{threads}", "-c"]
+    return [ZSTD, "-q", "-19", f"-T{threads}", "-c"]
+
+
+def _zstd_compress(data: bytes, threads: int, ultra: bool) -> bytes:
+    return _run(_zstd_cmd(threads, ultra), data)
 
 
 def _zstd_decompress(data: bytes) -> bytes:
@@ -59,7 +68,7 @@ def _xz_decompress(data: bytes) -> bytes:
     return _run([XZ, "-q", "-d", "-c"], data)
 
 
-def compress_bytes(data: bytes, threads: int = 0, try_xz: bool = True) -> tuple:
+def compress_bytes(data: bytes, threads: int = 0, try_xz: bool = True, ultra: bool = False) -> tuple:
     """Compress `data`, returning (backend_id: int, compressed: bytes).
     Picks whichever backend actually produces the smaller output; falls back
     to storing raw if neither helps (e.g. already-compressed input). For
@@ -72,7 +81,7 @@ def compress_bytes(data: bytes, threads: int = 0, try_xz: bool = True) -> tuple:
 
     if ZSTD and len(data) > 0:
         try:
-            candidates.append((BACKEND_ZSTD, _zstd_compress(data, threads)))
+            candidates.append((BACKEND_ZSTD, _zstd_compress(data, threads, ultra)))
         except Exception:
             pass
 
@@ -97,12 +106,14 @@ def decompress_bytes(backend: int, data: bytes) -> bytes:
         raise ValueError(f"unknown backend id {backend}")
 
 
-def compress_file(in_path, threads: int = 0, try_xz: bool = True, tmp_dir=None) -> tuple:
+def compress_file(in_path, threads: int = 0, try_xz: bool = True, tmp_dir=None, ultra: bool = False) -> tuple:
     """Compress the file at `in_path`, returning (backend_id, out_path,
     size). Runs each candidate backend reading/writing files directly (no
     Python-side buffering of the stream), so peak memory is independent of
     `in_path`'s size. Caller is responsible for deleting `out_path` once
-    its contents have been consumed (e.g. copied into a container)."""
+    its contents have been consumed (e.g. copied into a container).
+    `ultra=True` trades a lot of speed for a little extra ratio (zstd
+    --ultra -22 --long=27 instead of the -19 default)."""
     if threads <= 0:
         threads = max(1, os.cpu_count() or 1)
     in_path = Path(in_path)
@@ -113,7 +124,7 @@ def compress_file(in_path, threads: int = 0, try_xz: bool = True, tmp_dir=None) 
     if ZSTD and in_size > 0:
         out = Path(tempfile.mkstemp(prefix="bioz_zstd_", dir=tmp_dir)[1])
         try:
-            _run_file_to_file([ZSTD, "-q", "--ultra", "-22", "--long=27", f"-T{threads}", "-c"], in_path, out)
+            _run_file_to_file(_zstd_cmd(threads, ultra), in_path, out)
             candidates.append((BACKEND_ZSTD, out, out.stat().st_size))
         except Exception:
             out.unlink(missing_ok=True)

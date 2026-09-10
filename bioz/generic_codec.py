@@ -8,9 +8,9 @@ from . import backend
 from . import container
 
 
-def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True):
+def compress_file(in_path, out_path, threads: int = 0, try_xz: bool = True, ultra: bool = False):
     in_path = Path(in_path)
-    backend_id, tmp_path, comp_size = backend.compress_file(in_path, threads=threads, try_xz=try_xz)
+    backend_id, tmp_path, comp_size = backend.compress_file(in_path, threads=threads, try_xz=try_xz, ultra=ultra)
     try:
         container.write_container(out_path, container.FORMAT_GENERIC, [(backend_id, tmp_path)])
     finally:
