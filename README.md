@@ -62,13 +62,22 @@ pod5 (raw nanopore signal) is not handled by bioz.
 
 ## Status / known limitation
 
-Loads the whole input into memory (needed for the vectorized numpy 2-bit
-packing, and for the columnar SAM split) -- fine up to several GB, but
-**not yet suitable for 100GB+ files** without adding chunked/streaming
-processing. Do that pass before pointing this at anything that large.
-The CRAM path is the exception -- it delegates the heavy lifting to
-`samtools`, so it scales better already, though the final backend-compress
-step still buffers the whole CRAM stream in memory.
+Every codec (FASTQ, columnar SAM, CRAM, generic) streams through temp
+files in bounded-size chunks rather than loading the whole input into
+Python -- verified on real multi-GB files with `/usr/bin/time -v`: peak
+memory stays roughly constant as input size grows (measured ~35MB for the
+Python process itself regardless of file size, on files from a few MB up
+to 1.7GB; see below). No fixed file-size ceiling from bioz's own side.
+
+The one caveat: the *total* process-tree peak RSS reported by `time -v`
+is higher than that (~1-2.7GB on the files tested) and grows somewhat
+with input size -- that's `zstd --ultra -22 --long=27` (the backend's
+strongest setting) running multi-threaded across all cores, an external
+tool characteristic unrelated to bioz's own memory handling, not new in
+this pass. If footprint at extreme scale (100GB+) matters more than
+ratio, lower `-T`/pass `--fast` to trade some compression ratio for a
+smaller, more predictable memory profile.
+
 Everything else (correctness, ratio vs. gzip/zstd/xz) is tested and
 benchmarked in `tests/`.
 

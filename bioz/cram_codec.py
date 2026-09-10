@@ -10,10 +10,14 @@ The reference's absolute path and MD5 are stored in the .bioz container so
 decompression can verify the same reference is being used -- CRAM decoding
 with the wrong reference would silently reconstruct the wrong sequence
 rather than erroring, so this is checked rather than trusted.
+
+samtools always reads/writes real files here (never through a Python
+`bytes` object) so peak memory doesn't scale with alignment file size.
 """
 
 import hashlib
 import subprocess
+import tempfile
 from pathlib import Path
 
 from . import backend
@@ -37,35 +41,47 @@ def compress_file(in_path, out_path, ref_path, threads: int = 0, try_xz: bool = 
         raise FileNotFoundError(f"reference not found: {ref_path}")
 
     nthreads = max(1, threads or 1)
-    proc = subprocess.run(
-        ["samtools", "view", "-C", "-T", str(ref_path), "-@", str(nthreads), str(in_path)],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(f"samtools BAM/SAM->CRAM conversion failed: {proc.stderr.decode(errors='replace')}")
-    cram_bytes = proc.stdout
+    cram_tmp = Path(tempfile.mkstemp(prefix="bioz_cram_")[1])
+    try:
+        proc = subprocess.run(
+            ["samtools", "view", "-C", "-T", str(ref_path), "-@", str(nthreads),
+             "-o", str(cram_tmp), str(in_path)],
+            stderr=subprocess.PIPE,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"samtools BAM/SAM->CRAM conversion failed: {proc.stderr.decode(errors='replace')}")
 
-    data_backend, data_blob = backend.compress_bytes(cram_bytes, threads=threads, try_xz=try_xz)
+        data_backend, data_tmp, data_size = backend.compress_file(cram_tmp, threads=threads, try_xz=try_xz)
+        try:
+            ref_abspath = str(ref_path.resolve()).encode()
+            ref_md5 = _file_md5(ref_path).encode()
+            meta = len(ref_abspath).to_bytes(4, "little") + ref_abspath + ref_md5
+            meta_backend, meta_blob = backend.compress_bytes(meta, threads=threads, try_xz=False)
 
-    ref_abspath = str(ref_path.resolve()).encode()
-    ref_md5 = _file_md5(ref_path).encode()
-    meta = len(ref_abspath).to_bytes(4, "little") + ref_abspath + ref_md5
-    meta_backend, meta_blob = backend.compress_bytes(meta, threads=threads, try_xz=False)
+            container.write_container(
+                out_path, container.FORMAT_CRAM, [(meta_backend, meta_blob), (data_backend, data_tmp)]
+            )
+        finally:
+            data_tmp.unlink(missing_ok=True)
+    finally:
+        cram_tmp.unlink(missing_ok=True)
 
-    container.write_container(
-        out_path, container.FORMAT_CRAM, [(meta_backend, meta_blob), (data_backend, data_blob)]
-    )
     orig = Path(in_path).stat().st_size
     return orig, Path(out_path).stat().st_size
 
 
 def decompress_file(in_path, out_path, ref_path=None, threads: int = 0):
-    format_id, streams = container.read_container(in_path)
+    format_id, index = container.iter_container_streams(in_path)
     if format_id != container.FORMAT_CRAM:
         raise ValueError("not a CRAM-format .bioz file")
 
-    (meta_backend, meta_blob), (data_backend, data_blob) = streams
-    meta = backend.decompress_bytes(meta_backend, meta_blob)
+    (meta_backend, meta_off, meta_len), (data_backend, data_off, data_len) = index
+    meta_tmp = Path(tempfile.mkstemp(prefix="bioz_cram_meta_")[1])
+    try:
+        container.extract_stream_to_file(in_path, meta_off, meta_len, meta_tmp)
+        meta = meta_tmp.read_bytes()
+    finally:
+        meta_tmp.unlink(missing_ok=True)
     n = int.from_bytes(meta[:4], "little")
     stored_ref_path = meta[4 : 4 + n].decode()
     stored_ref_md5 = meta[4 + n :].decode()
@@ -82,14 +98,22 @@ def decompress_file(in_path, out_path, ref_path=None, threads: int = 0):
             f"decoding CRAM against the wrong reference would silently reconstruct the wrong sequence, refusing"
         )
 
-    cram_bytes = backend.decompress_bytes(data_backend, data_blob)
+    data_extract_tmp = Path(tempfile.mkstemp(prefix="bioz_cram_data_")[1])
+    cram_tmp = Path(tempfile.mkstemp(prefix="bioz_cram_out_")[1])
+    try:
+        container.extract_stream_to_file(in_path, data_off, data_len, data_extract_tmp)
+        backend.decompress_to_file(data_backend, data_extract_tmp, cram_tmp)
 
-    out_ext = Path(out_path).suffix.lower()
-    view_flag = "-h" if out_ext == ".sam" else "-b"
-    nthreads = max(1, threads or 1)
-    proc = subprocess.run(
-        ["samtools", "view", view_flag, "-T", str(ref), "-@", str(nthreads), "-o", str(out_path), "-"],
-        input=cram_bytes, stderr=subprocess.PIPE,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(f"samtools CRAM->BAM/SAM conversion failed: {proc.stderr.decode(errors='replace')}")
+        out_ext = Path(out_path).suffix.lower()
+        view_flag = "-h" if out_ext == ".sam" else "-b"
+        nthreads = max(1, threads or 1)
+        proc = subprocess.run(
+            ["samtools", "view", view_flag, "-T", str(ref), "-@", str(nthreads),
+             "-o", str(out_path), str(cram_tmp)],
+            stderr=subprocess.PIPE,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"samtools CRAM->BAM/SAM conversion failed: {proc.stderr.decode(errors='replace')}")
+    finally:
+        data_extract_tmp.unlink(missing_ok=True)
+        cram_tmp.unlink(missing_ok=True)
