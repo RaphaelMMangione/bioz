@@ -102,6 +102,18 @@ this became opt-in).
 
 pod5 (raw nanopore signal) is not handled by bioz.
 
+## Benchmarks
+
+Measured against gzip -9, zstd -19, and xz -9e on the same files (`tests/benchmark.py`).
+
+![FASTQ compression benchmark](assets/benchmark-fastq.png)
+
+![SAM/BAM compression benchmark](assets/benchmark-sambam.png)
+
+BAM is already internally compressed, so gzip/zstd/xz get ~1.00x (no real
+change) run directly on it -- bioz's columnar split still finds a real win
+there (1.82x), and CRAM against a reference does better still (1.90x).
+
 ## Status / known limitation
 
 Every codec (FASTQ, columnar SAM, CRAM, generic) streams through temp
