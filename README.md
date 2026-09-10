@@ -58,13 +58,7 @@ bioz decompress mydata_bioz/                   # -> mydata_bioz_decompressed/<na
 `--fast` skips the xz comparison (zstd only) for speed on large files.
 `-T N` controls compressor thread count (default: all cores).
 
-## pod5 (raw nanopore signal)
-
-Not handled by bioz -- that's a separate tool now (see
-`~/pod5_compress_test/`), since it needs a different, much heavier
-dependency chain (a trained neural model) than the lightweight codecs
-here. `archive/pod5_research/` has bioz's original attempt and why it
-was dropped (it lost to stock VBZ).
+pod5 (raw nanopore signal) is not handled by bioz.
 
 ## Status / known limitation
 
