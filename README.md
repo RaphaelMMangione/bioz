@@ -28,6 +28,41 @@ you pass `--lossy-quality`, and SAM/BAM never uses a reference unless you
 explicitly pass `--ref` (no auto-detection of reference files lying
 around).
 
+## Installation
+
+```bash
+git clone https://github.com/RaphaelMMangione/bioz.git
+cd bioz
+pip install .
+```
+
+This installs `bioz` as a normal shell command (not something you run via
+`python3 ...`) -- `pyproject.toml` registers a console entry point, so
+`pip install` puts a `bioz` executable on your PATH. Use `pip install -e .`
+instead if you're developing bioz itself (picks up source edits without
+reinstalling).
+
+bioz also needs a few command-line tools already installed and on your
+PATH -- these are separate system packages, not Python packages, so `pip`
+doesn't install them for you:
+
+- `zstd` and `xz` -- the compression backends bioz picks between
+- `samtools` -- for anything involving SAM/BAM/CRAM
+
+```bash
+# macOS (Homebrew)
+brew install zstd xz samtools
+
+# Debian/Ubuntu
+sudo apt install zstd xz-utils samtools
+```
+
+Verify everything's in place:
+
+```bash
+bioz --help
+```
+
 ## Usage
 
 ```
